@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Import Excel</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 900px; margin: 30px auto; padding: 0 16px; }
+    button { padding: 8px 16px; margin-right: 8px; cursor: pointer; }
+    input[type=password] { padding: 8px; margin-right: 8px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 16px; }
+    th, td { border: 1px solid #ccc; padding: 6px 10px; text-align: left; }
+    th { background: #f3f3f3; }
+    #msg { margin-top: 12px; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <h2>Import dữ liệu từ Excel</h2>
+
+  <input type="file" id="file" accept=".xlsx,.xls" hidden>
+  <button id="btnChoose">Chọn file Excel</button>
+  <input type="password" id="passcode" placeholder="Passcode">
+  <button id="btnImport" disabled>Import</button>
+  <span id="fileName"></span>
+
+  <div id="msg"></div>
+  <div id="preview"></div>
+
+  <script>
+    const API_URL = 'https://api.orderpermillion.trade/api/import'; // sẽ đổi ở Bước 5
+    let rows = [];
+
+    const $ = id => document.getElementById(id);
+
+    $('btnChoose').onclick = () => $('file').click();
+
+    $('file').onchange = async (e) => {
+      const f = e.target.files[0];
+      if (!f) return;
+      $('fileName').textContent = f.name;
+      const wb = XLSX.read(await f.arrayBuffer());
+      rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
+      renderTable();
+      $('btnImport').disabled = rows.length === 0;
+      $('msg').textContent = `Đã đọc ${rows.length} dòng. Kiểm tra lại rồi bấm Import.`;
+    };
+
+    function renderTable() {
+      const box = $('preview');
+      box.innerHTML = '';
+      if (!rows.length) return;
+      const cols = Object.keys(rows[0]);
+      const t = document.createElement('table');
+      const head = t.insertRow();
+      cols.forEach(c => { const th = document.createElement('th'); th.textContent = c; head.appendChild(th); });
+      rows.forEach(r => {
+        const tr = t.insertRow();
+        cols.forEach(c => { tr.insertCell().textContent = r[c]; });
+      });
+      box.appendChild(t);
+    }
+
+    $('btnImport').onclick = async () => {
+      $('btnImport').disabled = true;
+      $('msg').textContent = 'Đang import...';
+      try {
+        const res = await fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-passcode': $('passcode').value },
+          body: JSON.stringify({ rows })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Lỗi không xác định');
+        $('msg').textContent = `✅ Import thành công ${data.inserted} dòng.`;
+      } catch (err) {
+        $('msg').textContent = '❌ Lỗi: ' + err.message;
+        $('btnImport').disabled = false;
+      }
+    };
+  </script>
+</body>
+</html>
