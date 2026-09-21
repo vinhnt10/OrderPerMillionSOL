@@ -69,6 +69,22 @@
           SemiFinishedProduct: { note: 'Tối đa 20 ký tự', example: 0 },
           StandardIssue:       { note: 'Tối đa 20 ký tự', example: 0 }
         }
+      },
+      {
+        id: 'BOM', title: 'BOM', endpoint: '/api/BOM',
+        columns: ['ItemCode', 'ItemName', 'Unit', 'Price', 'SemiFinishedProductCode', 'Quantity'],
+        labels: {
+          ItemCode: 'Mã Món', ItemName: 'Tên Món', Unit: 'ĐVT',
+          Price: 'Giá bán', SemiFinishedProductCode: 'Mã NVL', Quantity: 'Số lượng'
+        },
+        guide: {
+          ItemCode:                { required: true, note: 'Mã món, tối đa 20 ký tự. Mã có số 0 ở đầu: đặt cả cột là Text trước khi nhập', example: 'M001' },
+          ItemName:                { note: 'Tên món, tối đa 255 ký tự', example: 'Cơm cuộn cá hồi' },
+          Unit:                    { required: true, note: 'Đơn vị tính, tối đa 20 ký tự', example: 'Phần' },
+          Price:                   { note: 'Giá bán, số, tối đa 2 chữ số thập phân', example: 89000 },
+          SemiFinishedProductCode: { required: true, note: 'Mã nguyên vật liệu, tối đa 20 ký tự. Mã có số 0 ở đầu: đặt cả cột là Text trước khi nhập', example: '21000001' },
+          Quantity:                { required: true, note: 'Số lượng, số, tối đa 4 chữ số thập phân', example: 0.15 }
+        }
       }
     ];
 
