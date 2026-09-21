@@ -8,76 +8,151 @@
   <style>
     body { font-family: system-ui, sans-serif; max-width: 900px; margin: 30px auto; padding: 0 16px; }
     button { padding: 8px 16px; margin-right: 8px; cursor: pointer; }
-    input[type=password] { padding: 8px; margin-right: 8px; }
+    input[type=password] { padding: 8px; }
+    button:focus-visible, input:focus-visible { outline: 2px solid #0b57d0; outline-offset: 2px; }
+
+    .tabs { display: flex; gap: 4px; margin: 20px 0 16px; border-bottom: 2px solid #ddd; }
+    .tab { margin: 0 0 -2px; padding: 10px 18px; border: none; border-bottom: 3px solid transparent;
+           background: none; font: inherit; color: #444; }
+    .tab[aria-selected="true"] { border-bottom-color: #0b57d0; color: #000; font-weight: 600; }
+
+    .hint { margin: 0 0 12px; color: #555; font-size: 14px; }
+    .msg { margin-top: 12px; font-weight: 600; min-height: 1.4em; }
+    .msg.err { color: #b3261e; }
+    .table-wrap { overflow-x: auto; }
     table { border-collapse: collapse; width: 100%; margin-top: 16px; }
     th, td { border: 1px solid #ccc; padding: 6px 10px; text-align: left; }
     th { background: #f3f3f3; }
-    #msg { margin-top: 12px; font-weight: 600; }
   </style>
 </head>
 <body>
   <h2>Import dữ liệu từ Excel</h2>
 
-  <input type="file" id="file" accept=".xlsx,.xls" hidden>
-  <button id="btnChoose">Chọn file Excel</button>
-  <input type="password" id="passcode" placeholder="Passcode">
-  <button id="btnImport" disabled>Import</button>
-  <span id="fileName"></span>
+  <input type="password" id="passcode" placeholder="Passcode" autocomplete="off">
 
-  <div id="msg"></div>
-  <div id="preview"></div>
+  <div class="tabs" id="tabs" role="tablist"></div>
+  <div id="panels"></div>
 
   <script>
-    const API_URL = 'https://api.orderpermillion.trade/api/import'; // sẽ đổi ở Bước 5
-    let rows = [];
+    const API_BASE = 'https://api.orderpermillion.trade';
+
+    // Mỗi tab = 1 endpoint API + danh sách cột bắt buộc trong file Excel.
+    // Muốn thêm tab mới: thêm 1 dòng ở đây (và khai báo tương ứng trong server.js).
+    const TABS = [
+      { id: 'nhanvien', title: 'Nhân viên', endpoint: '/api/import',        columns: ['MaNV', 'HoTen', 'PhongBan'] },
+      { id: 'UniCode',  title: 'UniCode',  endpoint: '/api/UniCode', columns: ['ItemCode','ItemName','Unit','BaseRatio','ConversionRatio','ConversionUnit','PercentageLoss','BOM','SemiFinishedProduct', 'StandardIssue'] }
+    ];
 
     const $ = id => document.getElementById(id);
+    const tabButtons = {};
+    const panels = {};
 
-    $('btnChoose').onclick = () => $('file').click();
+    function createPanel(cfg) {
+      const panel = document.createElement('section');
+      panel.setAttribute('role', 'tabpanel');
+      panel.hidden = true;
+      panel.innerHTML = `
+        <p class="hint">Dòng 1 của file Excel phải có các cột: <b>${cfg.columns.join(', ')}</b> (đúng chữ hoa/thường). Chỉ đọc sheet đầu tiên.</p>
+        <input type="file" accept=".xlsx,.xls" hidden>
+        <button class="choose">Chọn file Excel</button>
+        <button class="import" disabled>Import</button>
+        <span class="fname"></span>
+        <div class="msg" role="status"></div>
+        <div class="table-wrap"></div>`;
 
-    $('file').onchange = async (e) => {
-      const f = e.target.files[0];
-      if (!f) return;
-      $('fileName').textContent = f.name;
-      const wb = XLSX.read(await f.arrayBuffer());
-      rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
-      renderTable();
-      $('btnImport').disabled = rows.length === 0;
-      $('msg').textContent = `Đã đọc ${rows.length} dòng. Kiểm tra lại rồi bấm Import.`;
-    };
+      const q = s => panel.querySelector(s);
+      let rows = [];
 
-    function renderTable() {
-      const box = $('preview');
-      box.innerHTML = '';
-      if (!rows.length) return;
-      const cols = Object.keys(rows[0]);
-      const t = document.createElement('table');
-      const head = t.insertRow();
-      cols.forEach(c => { const th = document.createElement('th'); th.textContent = c; head.appendChild(th); });
-      rows.forEach(r => {
-        const tr = t.insertRow();
-        cols.forEach(c => { tr.insertCell().textContent = r[c]; });
-      });
-      box.appendChild(t);
+      const msg = (text, isErr) => {
+        q('.msg').textContent = text;
+        q('.msg').className = 'msg' + (isErr ? ' err' : '');
+      };
+
+      function render() {
+        const box = q('.table-wrap');
+        box.innerHTML = '';
+        if (!rows.length) return;
+        const cols = Object.keys(rows[0]);
+        const t = document.createElement('table');
+        const head = t.insertRow();
+        cols.forEach(c => { const th = document.createElement('th'); th.textContent = c; head.appendChild(th); });
+        rows.forEach(r => {
+          const tr = t.insertRow();
+          cols.forEach(c => { tr.insertCell().textContent = r[c]; });
+        });
+        box.appendChild(t);
+      }
+
+      q('.choose').onclick = () => q('input[type=file]').click();
+
+      q('input[type=file]').onchange = async (e) => {
+        const f = e.target.files[0];
+        if (!f) return;
+        q('.fname').textContent = f.name;
+        try {
+          const wb = XLSX.read(await f.arrayBuffer());
+          rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
+        } catch (err) {
+          rows = [];
+        }
+        render();
+
+        const missing = rows.length ? cfg.columns.filter(c => !(c in rows[0])) : [];
+        if (!rows.length) msg('Không đọc được dữ liệu ở sheet đầu tiên của file.', true);
+        else if (missing.length) msg('File thiếu cột: ' + missing.join(', ') + '. Sửa header dòng 1 rồi chọn lại file.', true);
+        else msg(`Đã đọc ${rows.length} dòng. Kiểm tra lại rồi bấm Import.`);
+
+        q('.import').disabled = !rows.length || missing.length > 0;
+        e.target.value = '';   // cho phép chọn lại đúng file này sau khi sửa
+      };
+
+      q('.import').onclick = async () => {
+        const btn = q('.import');
+        btn.disabled = true;
+        msg('Đang import...');
+        try {
+          const res = await fetch(API_BASE + cfg.endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-passcode': $('passcode').value },
+            body: JSON.stringify({ rows })
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || 'Lỗi máy chủ (' + res.status + ')');
+          msg(`Import thành công ${data.inserted} dòng.`);   // nút Import giữ tắt để tránh import trùng
+        } catch (err) {
+          const network = err instanceof TypeError;
+          msg('Lỗi: ' + (network ? 'không kết nối được API (kiểm tra API, tunnel, CORS).' : err.message), true);
+          btn.disabled = false;
+        }
+      };
+
+      return panel;
     }
 
-    $('btnImport').onclick = async () => {
-      $('btnImport').disabled = true;
-      $('msg').textContent = 'Đang import...';
-      try {
-        const res = await fetch(API_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-passcode': $('passcode').value },
-          body: JSON.stringify({ rows })
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Lỗi không xác định');
-        $('msg').textContent = `✅ Import thành công ${data.inserted} dòng.`;
-      } catch (err) {
-        $('msg').textContent = '❌ Lỗi: ' + err.message;
-        $('btnImport').disabled = false;
-      }
-    };
+    function selectTab(id) {
+      TABS.forEach(t => {
+        const on = t.id === id;
+        tabButtons[t.id].setAttribute('aria-selected', on);
+        panels[t.id].hidden = !on;
+      });
+      history.replaceState(null, '', '#' + id);
+    }
+
+    TABS.forEach(cfg => {
+      const b = document.createElement('button');
+      b.className = 'tab';
+      b.setAttribute('role', 'tab');
+      b.textContent = cfg.title;
+      b.onclick = () => selectTab(cfg.id);
+      $('tabs').appendChild(b);
+      tabButtons[cfg.id] = b;
+
+      panels[cfg.id] = createPanel(cfg);
+      $('panels').appendChild(panels[cfg.id]);
+    });
+
+    const fromHash = location.hash.slice(1);
+    selectTab(TABS.some(t => t.id === fromHash) ? fromHash : TABS[0].id);
   </script>
 </body>
 </html>
