@@ -39,8 +39,8 @@
     // Mỗi tab = 1 endpoint API + danh sách cột bắt buộc trong file Excel.
     // Muốn thêm tab mới: thêm 1 dòng ở đây (và khai báo tương ứng trong server.js).
     const TABS = [
-      { id: 'nhanvien', title: 'Nhân viên', endpoint: '/api/import',        columns: ['MaNV', 'HoTen', 'PhongBan'] },
-      { id: 'UniCode',  title: 'UniCode',  endpoint: '/api/UniCode', columns: ['ItemCode','ItemName','Unit','BaseRatio','ConversionRatio','ConversionUnit','PercentageLoss','BOM','SemiFinishedProduct', 'StandardIssue'] }
+      { id: 'nhanvien', title: 'Nhân viên', endpoint: '/api/import',  columns: ['MaNV', 'HoTen', 'PhongBan'] },
+      { id: 'UniCode',  title: 'UniCode',   endpoint: '/api/UniCode', columns: ['ItemCode', 'ItemName', 'Unit', 'BaseRatio', 'ConversionRatio', 'ConversionUnit', 'PercentageLoss', 'BOM', 'SemiFinishedProduct', 'StandardIssue'] }
     ];
 
     const $ = id => document.getElementById(id);
@@ -91,7 +91,10 @@
         q('.fname').textContent = f.name;
         try {
           const wb = XLSX.read(await f.arrayBuffer());
-          rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
+          // Cắt khoảng trắng thừa ở tên cột: ô header có định dạng số/tiền tệ
+          // sẽ bị SheetJS đọc thành ' BOM ' thay vì 'BOM'.
+          rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' })
+            .map(r => Object.fromEntries(Object.entries(r).map(([k, v]) => [k.trim(), v])));
         } catch (err) {
           rows = [];
         }
