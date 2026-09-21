@@ -39,21 +39,82 @@
     // Mỗi tab = 1 endpoint API + danh sách cột bắt buộc trong file Excel.
     // Muốn thêm tab mới: thêm 1 dòng ở đây (và khai báo tương ứng trong server.js).
     const TABS = [
-      { id: 'nhanvien', title: 'Nhân viên', endpoint: '/api/import',  columns: ['MaNV', 'HoTen', 'PhongBan'] },
-      { id: 'UniCode',  title: 'UniCode',   endpoint: '/api/UniCode', columns: ['ItemCode', 'ItemName', 'Unit', 'BaseRatio', 'ConversionRatio', 'ConversionUnit', 'PercentageLoss', 'BOM', 'SemiFinishedProduct', 'StandardIssue'] }
+      {
+        id: 'nhanvien', title: 'Nhân viên', endpoint: '/api/import',
+        columns: ['MaNV', 'HoTen', 'PhongBan'],
+        guide: {
+          MaNV:     { required: true, note: 'Mã nhân viên, tối đa 50 ký tự', example: 'NV001' },
+          HoTen:    { note: 'Họ tên, tối đa 200 ký tự', example: 'Nguyen Van A' },
+          PhongBan: { note: 'Phòng ban, tối đa 100 ký tự', example: 'IT' }
+        }
+      },
+      {
+        id: 'UniCode', title: 'UniCode', endpoint: '/api/UniCode',
+        columns: ['ItemCode', 'ItemName', 'Unit', 'BaseRatio', 'ConversionRatio', 'ConversionUnit', 'PercentageLoss', 'BOM', 'SemiFinishedProduct', 'StandardIssue'],
+        // Tên cột hiển thị cho người dùng (header file Excel). API và SQL vẫn dùng tên trong 'columns'.
+        labels: {
+          ItemCode: 'Mã vật tư', ItemName: 'Tên vật tư', Unit: 'Đvt',
+          BaseRatio: 'Tỷ lệ gốc', ConversionRatio: 'Tỷ lệ chuyển đổi', ConversionUnit: 'Đơn vị chuyển đổi',
+          PercentageLoss: '% Hao hụt', BOM: 'BOM', SemiFinishedProduct: 'BTP', StandardIssue: 'Xuất Định Mức'
+        },
+        guide: {
+          ItemCode:            { required: true, note: 'Mã vật tư, tối đa 20 ký tự. Mã có số 0 ở đầu: đặt cả cột là Text trước khi nhập', example: '12600002' },
+          ItemName:            { note: 'Tên vật tư, tối đa 255 ký tự', example: 'Eel Japan (3pcs/kg)/Unagi/Lươn Nhật 3 con' },
+          Unit:                { note: 'Đơn vị tính, tối đa 20 ký tự', example: 'kg' },
+          BaseRatio:           { note: 'Số, tối đa 4 chữ số thập phân', example: 1000 },
+          ConversionRatio:     { note: 'Số, tối đa 4 chữ số thập phân', example: 850 },
+          ConversionUnit:      { note: 'Đơn vị quy đổi, tối đa 20 ký tự', example: 'Gs' },
+          PercentageLoss:      { note: 'Số nhỏ hơn 1000, tối đa 2 chữ số thập phân (phần dư bị làm tròn)', example: 0.85 },
+          BOM:                 { note: 'Tối đa 20 ký tự', example: 0 },
+          SemiFinishedProduct: { note: 'Tối đa 20 ký tự', example: 0 },
+          StandardIssue:       { note: 'Tối đa 20 ký tự', example: 0 }
+        }
+      }
     ];
 
     const $ = id => document.getElementById(id);
     const tabButtons = {};
     const panels = {};
 
+    // Tên hiển thị của cột. Tab không khai báo 'labels' thì dùng luôn tên cột.
+    const labelOf = (cfg, col) => (cfg.labels && cfg.labels[col]) || col;
+    // Chuẩn hóa tên cột trong file để so sánh: đưa Unicode về 1 dạng, gộp khoảng trắng,
+    // bỏ khoảng trắng hai đầu, không phân biệt hoa/thường.
+    const norm = s => String(s).normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase();
+
+    // Sinh file mẫu ngay trên trình duyệt từ cấu hình của tab.
+    // Sheet 1 'Data' chỉ có dòng header (không có dữ liệu mẫu để tránh import nhầm).
+    // Sheet 2 'Hướng dẫn' mô tả từng cột. Trang chỉ đọc sheet đầu tiên khi import.
+    function downloadTemplate(cfg) {
+      const wb = XLSX.utils.book_new();
+
+      const head = cfg.columns.map(c => labelOf(cfg, c));
+      const data = XLSX.utils.aoa_to_sheet([head]);
+      data['!cols'] = head.map(h => ({ wch: Math.max(h.length + 4, 14) }));
+      XLSX.utils.book_append_sheet(wb, data, 'Data');
+
+      const g = cfg.guide || {};
+      const rows = [['Cột', 'Bắt buộc', 'Ghi chú', 'Ví dụ']];
+      cfg.columns.forEach(c => {
+        const i = g[c] || {};
+        rows.push([labelOf(cfg, c), i.required ? 'Có' : 'Không', i.note || '', i.example ?? '']);
+      });
+      rows.push([], ['Chỉ sheet "Data" (sheet đầu tiên) được import. Không đổi tên cột ở dòng 1.']);
+      const guide = XLSX.utils.aoa_to_sheet(rows);
+      guide['!cols'] = [{ wch: 24 }, { wch: 12 }, { wch: 70 }, { wch: 42 }];
+      XLSX.utils.book_append_sheet(wb, guide, 'Hướng dẫn');
+
+      XLSX.writeFile(wb, 'Template_' + cfg.id + '.xlsx');
+    }
+
     function createPanel(cfg) {
       const panel = document.createElement('section');
       panel.setAttribute('role', 'tabpanel');
       panel.hidden = true;
       panel.innerHTML = `
-        <p class="hint">Dòng 1 của file Excel phải có các cột: <b>${cfg.columns.join(', ')}</b> (đúng chữ hoa/thường). Chỉ đọc sheet đầu tiên.</p>
+        <p class="hint">Dòng 1 của file Excel phải có các cột: <b>${cfg.columns.map(c => labelOf(cfg, c)).join(', ')}</b> (nên dùng file mẫu tải từ trang). Chỉ đọc sheet đầu tiên.</p>
         <input type="file" accept=".xlsx,.xls" hidden>
+        <button class="tpl">Tải file mẫu</button>
         <button class="choose">Chọn file Excel</button>
         <button class="import" disabled>Import</button>
         <span class="fname"></span>
@@ -75,7 +136,7 @@
         const cols = Object.keys(rows[0]);
         const t = document.createElement('table');
         const head = t.insertRow();
-        cols.forEach(c => { const th = document.createElement('th'); th.textContent = c; head.appendChild(th); });
+        cols.forEach(c => { const th = document.createElement('th'); th.textContent = labelOf(cfg, c); head.appendChild(th); });
         rows.forEach(r => {
           const tr = t.insertRow();
           cols.forEach(c => { tr.insertCell().textContent = r[c]; });
@@ -83,6 +144,7 @@
         box.appendChild(t);
       }
 
+      q('.tpl').onclick = () => downloadTemplate(cfg);
       q('.choose').onclick = () => q('input[type=file]').click();
 
       q('input[type=file]').onchange = async (e) => {
@@ -91,10 +153,13 @@
         q('.fname').textContent = f.name;
         try {
           const wb = XLSX.read(await f.arrayBuffer());
-          // Cắt khoảng trắng thừa ở tên cột: ô header có định dạng số/tiền tệ
-          // sẽ bị SheetJS đọc thành ' BOM ' thay vì 'BOM'.
+          // Tên cột trong file (tiếng Việt hoặc tên gốc) được đổi về tên kỹ thuật để gửi lên API.
+          // So sánh không phân biệt hoa/thường và bỏ khoảng trắng thừa (ô header có định dạng
+          // số/tiền tệ sẽ bị SheetJS đọc thành ' BOM ' thay vì 'BOM').
+          const lookup = {};
+          cfg.columns.forEach(c => { lookup[norm(c)] = c; lookup[norm(labelOf(cfg, c))] = c; });
           rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' })
-            .map(r => Object.fromEntries(Object.entries(r).map(([k, v]) => [k.trim(), v])));
+            .map(r => Object.fromEntries(Object.entries(r).map(([k, v]) => [lookup[norm(k)] || String(k).trim(), v])));
         } catch (err) {
           rows = [];
         }
@@ -102,7 +167,7 @@
 
         const missing = rows.length ? cfg.columns.filter(c => !(c in rows[0])) : [];
         if (!rows.length) msg('Không đọc được dữ liệu ở sheet đầu tiên của file.', true);
-        else if (missing.length) msg('File thiếu cột: ' + missing.join(', ') + '. Sửa header dòng 1 rồi chọn lại file.', true);
+        else if (missing.length) msg('File thiếu cột: ' + missing.map(c => labelOf(cfg, c)).join(', ') + '. Sửa header dòng 1 rồi chọn lại file.', true);
         else msg(`Đã đọc ${rows.length} dòng. Kiểm tra lại rồi bấm Import.`);
 
         q('.import').disabled = !rows.length || missing.length > 0;
