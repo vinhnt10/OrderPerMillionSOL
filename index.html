@@ -85,6 +85,25 @@
           SemiFinishedProductCode: { required: true, note: 'Mã nguyên vật liệu, tối đa 20 ký tự. Mã có số 0 ở đầu: đặt cả cột là Text trước khi nhập', example: '21000001' },
           Quantity:                { required: true, note: 'Số lượng, số, tối đa 4 chữ số thập phân', example: 0.15 }
         }
+      },
+      {
+        id: 'BTP', title: 'BTP', endpoint: '/api/BOM-BTP',
+        columns: ['Ma_Mon', 'Ten_BTP', 'DVT', 'Dinh_Luong_TP', 'Gia_Von', 'Gia_DVT_Goc', 'Ma_NVL', 'Dinh_Muc'],
+        labels: {
+          Ma_Mon: 'Mã món', Ten_BTP: 'Tên BTP', DVT: 'ĐVT',
+          Dinh_Luong_TP: 'Định lượng TP', Gia_Von: 'Giá vốn', Gia_DVT_Goc: 'Giá Đvt Gốc',
+          Ma_NVL: 'Mã NVL', Dinh_Muc: 'Định mức'
+        },
+        guide: {
+          Ma_Mon:        { required: true, note: 'Mã món, tối đa 20 ký tự. Mã có số 0 ở đầu: đặt cả cột là Text trước khi nhập', example: 'M001' },
+          Ten_BTP:       { note: 'Tên bán thành phẩm, tối đa 255 ký tự', example: 'Cơm cuộn cá hồi' },
+          DVT:           { required: true, note: 'Đơn vị tính, tối đa 20 ký tự', example: 'Phần' },
+          Dinh_Luong_TP: { note: 'Định lượng thành phẩm, số, tối đa 4 chữ số thập phân', example: 1 },
+          Gia_Von:       { note: 'Giá vốn, số, tối đa 2 chữ số thập phân', example: 25000 },
+          Gia_DVT_Goc:   { note: 'Giá theo đơn vị gốc, số, tối đa 2 chữ số thập phân', example: 89000 },
+          Ma_NVL:        { required: true, note: 'Mã nguyên vật liệu, tối đa 20 ký tự. Mã có số 0 ở đầu: đặt cả cột là Text trước khi nhập', example: '21000001' },
+          Dinh_Muc:      { note: 'Định mức, số, tối đa 4 chữ số thập phân', example: 0.15 }
+        }
       }
     ];
 
