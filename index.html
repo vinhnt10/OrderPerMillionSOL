@@ -49,6 +49,17 @@
         }
       },
       {
+        id: 'token', title: 'Token', type: 'token',
+        loginUrl: 'https://sol-quicksys-api.f2tech.asia:6443/api/v1/Login',
+        params: { UserName: 'FAST', Module: 'QuickAPI', BranchId: 3 }
+        // Password KHÔNG đặt ở đây — lấy từ ô nhập trên panel lúc bấm nút,
+        // vì trang này public nên không được ghi mật khẩu thẳng vào code.
+      },
+      {
+        id: 'BCBH', title: 'BCBH', type: 'placeholder'
+        // Tab để sẵn, chưa nối API/bảng SQL. Muốn kích hoạt: xem checklist-create-tab-import.md
+      },
+      {
         id: 'UniCode', title: 'UniCode', endpoint: '/api/UniCode',
         columns: ['ItemCode', 'ItemName', 'Unit', 'BaseRatio', 'ConversionRatio', 'ConversionUnit', 'PercentageLoss', 'BOM', 'SemiFinishedProduct', 'StandardIssue'],
         // Tên cột hiển thị cho người dùng (header file Excel). API và SQL vẫn dùng tên trong 'columns'.
@@ -87,7 +98,7 @@
         }
       },
       {
-        id: 'BTP', title: 'BTP', endpoint: '/api/BOM-BTP',
+        id: 'BTP', title: 'BTP', endpoint: '/api/BOM_BTP',
         columns: ['Ma_Mon', 'Ten_BTP', 'DVT', 'Dinh_Luong_TP', 'Gia_Von', 'Gia_DVT_Goc', 'Ma_NVL', 'Dinh_Muc'],
         labels: {
           Ma_Mon: 'Mã món', Ten_BTP: 'Tên BTP', DVT: 'ĐVT',
@@ -98,12 +109,36 @@
           Ma_Mon:        { required: true, note: 'Mã món, tối đa 20 ký tự. Mã có số 0 ở đầu: đặt cả cột là Text trước khi nhập', example: 'M001' },
           Ten_BTP:       { note: 'Tên bán thành phẩm, tối đa 255 ký tự', example: 'Cơm cuộn cá hồi' },
           DVT:           { required: true, note: 'Đơn vị tính, tối đa 20 ký tự', example: 'Phần' },
-          Dinh_Luong_TP: { note: 'Định lượng thành phẩm, số, tối đa 4 chữ số thập phân', example: 1 },
+          Dinh_Luong_TP: { required: true, note: 'Định lượng thành phẩm, số, tối đa 4 chữ số thập phân', example: 1 },
           Gia_Von:       { note: 'Giá vốn, số, tối đa 2 chữ số thập phân', example: 25000 },
           Gia_DVT_Goc:   { note: 'Giá theo đơn vị gốc, số, tối đa 2 chữ số thập phân', example: 89000 },
           Ma_NVL:        { required: true, note: 'Mã nguyên vật liệu, tối đa 20 ký tự. Mã có số 0 ở đầu: đặt cả cột là Text trước khi nhập', example: '21000001' },
-          Dinh_Muc:      { note: 'Định mức, số, tối đa 4 chữ số thập phân', example: 0.15 }
+          Dinh_Muc:      { required: true, note: 'Định mức, số, tối đa 4 chữ số thập phân', example: 0.15 }
         }
+      },
+      {
+        id: 'Data_OPS', title: 'Data_OPS', type: 'placeholder'
+        // Tab để sẵn, chưa nối API/bảng SQL. Muốn kích hoạt: xem checklist-create-tab-import.md
+      },
+      {
+        id: 'Boi_so_me_nau', title: 'Boi_so_me_nau', type: 'placeholder'
+        // Tab để sẵn, chưa nối API/bảng SQL. Muốn kích hoạt: xem checklist-create-tab-import.md
+      },
+      {
+        id: 'Kiem_ke', title: 'Kiem_ke', type: 'placeholder'
+        // Tab để sẵn, chưa nối API/bảng SQL. Muốn kích hoạt: xem checklist-create-tab-import.md
+      },
+      {
+        id: 'Sales', title: 'Sales', type: 'placeholder'
+        // Tab để sẵn, chưa nối API/bảng SQL. Muốn kích hoạt: xem checklist-create-tab-import.md
+      },
+      {
+        id: 'Per_Million', title: 'Per_Million', type: 'placeholder'
+        // Tab để sẵn, chưa nối API/bảng SQL. Muốn kích hoạt: xem checklist-create-tab-import.md
+      },
+      {
+        id: 'Dat_Hang', title: 'Dat_Hang', type: 'placeholder'
+        // Tab để sẵn, chưa nối API/bảng SQL. Muốn kích hoạt: xem checklist-create-tab-import.md
       }
     ];
 
@@ -232,6 +267,65 @@
       return panel;
     }
 
+    function createTokenPanel(cfg) {
+      const panel = document.createElement('section');
+      panel.setAttribute('role', 'tabpanel');
+      panel.hidden = true;
+      panel.innerHTML = `
+        <p class="hint">Gọi trực tiếp API đăng nhập F2Tech từ trình duyệt và hiển thị response. Không lưu vào SQL Server.</p>
+        <input type="password" class="f2pass" placeholder="Password F2 (UserName=${cfg.params.UserName})" autocomplete="off">
+        <button class="run">Get data</button>
+        <div class="msg" role="status"></div>
+        <textarea class="result" readonly rows="16"
+          style="width:100%; margin-top:10px; font-family:monospace; font-size:13px; box-sizing:border-box;"></textarea>`;
+
+      const q = s => panel.querySelector(s);
+      const msg = (text, isErr) => {
+        q('.msg').textContent = text;
+        q('.msg').className = 'msg' + (isErr ? ' err' : '');
+      };
+
+      q('.run').onclick = async () => {
+        const pass = q('.f2pass').value;
+        if (!pass) { msg('Nhập password trước khi gọi API.', true); return; }
+
+        const btn = q('.run');
+        btn.disabled = true;
+        msg('Đang gọi API...');
+        q('.result').value = '';
+
+        const url = new URL(cfg.loginUrl);
+        Object.entries(cfg.params).forEach(([k, v]) => url.searchParams.set(k, v));
+        url.searchParams.set('Password', pass);
+
+        try {
+          const res = await fetch(url.toString(), { method: 'POST' });
+          const text = await res.text();
+          let pretty = text;
+          try { pretty = JSON.stringify(JSON.parse(text), null, 2); } catch (e) {}
+          q('.result').value = pretty;
+          msg(res.ok ? `HTTP ${res.status}` : `HTTP ${res.status} (lỗi)`, !res.ok);
+        } catch (err) {
+          // Lỗi network ở đây thường là do CORS: F2 không cho phép JS ở domain
+          // khác gọi thẳng, cần chuyển sang gọi qua server trung gian.
+          q('.result').value = String(err);
+          msg('Không gọi được API (có thể do CORS hoặc mạng — xem chi tiết bên dưới).', true);
+        } finally {
+          btn.disabled = false;
+        }
+      };
+
+      return panel;
+    }
+
+    function createPlaceholderPanel(cfg) {
+      const panel = document.createElement('section');
+      panel.setAttribute('role', 'tabpanel');
+      panel.hidden = true;
+      panel.innerHTML = `<p class="hint">Tab "${cfg.title}" đang được chuẩn bị, chưa có chức năng import.</p>`;
+      return panel;
+    }
+
     function selectTab(id) {
       TABS.forEach(t => {
         const on = t.id === id;
@@ -250,7 +344,9 @@
       $('tabs').appendChild(b);
       tabButtons[cfg.id] = b;
 
-      panels[cfg.id] = createPanel(cfg);
+      panels[cfg.id] = cfg.type === 'token' ? createTokenPanel(cfg)
+        : cfg.type === 'placeholder' ? createPlaceholderPanel(cfg)
+        : createPanel(cfg);
       $('panels').appendChild(panels[cfg.id]);
     });
 
